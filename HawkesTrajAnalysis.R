@@ -55,7 +55,7 @@ BLOCKS <- if (length(ARGS)) ARGS else
   c("Tables1to6","Table7","Table8","Sec6Edges","Sec6Driver","Sec6Calib",
     "Sec7Fits","Sec7Boot","Sec7Resid","Sec7Lag","Sec7Origin",
     "Table9","Sec7Blocks","Sec7Thresh","Sec7Events","Sec7RhoACF",
-    "Table10","Sec7FlockNull","Figure1")
+    "Table10","Sec7FlockNull","Figure1","LambdaCheck")
 run <- function(b) b %in% BLOCKS
 DATA_DIR <- "Data"; OUT_DIR <- "."
 dir.create(file.path(OUT_DIR,"ckpt"), showWarnings=FALSE, recursive=TRUE)
@@ -842,7 +842,7 @@ if (run("Table8")) {
 }
 
 ## ---------------------------------------------------------------------
-#  Generates Section 8.2: rho(R), intensity shares, dAIC for free diagonal
+#  Generates Section 7: rho(R), intensity shares, dQ for free diagonal
 
 ## --------------------------------------------------------------------
 ##  Section 6: threshold-free edge selection
@@ -1139,7 +1139,8 @@ if (run("Sec7Fits")) {
                             "rho(R) 95% CI lower","rho(R) 95% CI upper","median rho(A) off-diagonal",
                             "median alpha_ii","median edges/flight","background % (alpha_ii free)",
                             "self % (alpha_ii free)","cross % (alpha_ii free)",
-                            "background % (alpha_ii=0)","cross % (alpha_ii=0)","dAIC free vs fixed diagonal"),
+                            "background % (alpha_ii=0)","cross % (alpha_ii=0)",
+                            "dQ free vs fixed diagonal","extra parameters, free diagonal"),
                  value=c(round(median(rhoR),3),round(max(rhoR),3),sum(rhoR>=1),
                          round(quantile(rhoR,.025,names=FALSE),3),round(quantile(rhoR,.975,names=FALSE),3),
                          round(median(fv(FREE,"rho_off")),4),
@@ -1147,15 +1148,15 @@ if (run("Sec7Fits")) {
                          round(median(fv(FREE,"n_edges")),0),
                          round(100*shF[1],1),round(100*shF[2],1),round(100*shF[3],1),
                          round(100*shX[1],1),round(100*shX[3],1),
-                         round((2*sum(fv(FIX,"npar"))-2*sum(fv(FIX,"loglik")))-
-                                 (2*sum(fv(FREE,"npar"))-2*sum(fv(FREE,"loglik"))),1)))
+                         round(sum(fv(FREE,"loglik"))-sum(fv(FIX,"loglik")),3),
+                         sum(fv(FREE,"npar"))-sum(fv(FIX,"npar"))))
   print(RF); fwrite(RF,file.path(OUT_DIR,"pigeon_real_fits.csv"))
   saveRDS(FREE,file.path(OUT_DIR,"ckpt","free_fits.rds"))
   message("  Complete")
 }
 
 ## ---------------------------------------------------------------------
-#  Generates Table 9 (null battery) and Section 8.3 p-values
+#  Generates Table 9 (null battery) and Section 7 p-values
 
 ## --------------------------------------------------------------------
 ##  Section 7: cluster bootstrap intervals
@@ -1245,7 +1246,7 @@ if (run("Sec7Boot")) {
   message("  Complete")
 }
 ## ---------------------------------------------------------------------
-#  Generates Section 8.4: event-definition sensitivity (thresholds and types)
+#  Generates Section 7: event-definition sensitivity (thresholds and types)
 
 ## --------------------------------------------------------------------
 ##  Section 7: residual diagnostics
@@ -1300,7 +1301,7 @@ if (run("Sec7Resid")) {
 }
 
 ## ---------------------------------------------------------------------
-#  Generates Section 8.2: cross-bird check on the 2 s residual oscillation
+#  Generates Section 7: cross-bird check on the 2 s residual oscillation
 
 ## --------------------------------------------------------------------
 ##  Section 7: 2 s oscillation, within and cross bird
@@ -1343,7 +1344,7 @@ if (run("Sec7Lag")) {
 }
 
 ## ---------------------------------------------------------------------
-#  Generates Section 8.2: origin tests for the 2 s oscillation
+#  Generates Section 7: origin tests for the 2 s oscillation
 
 ## --------------------------------------------------------------------
 ##  Section 7: raw-signal spectrum before binning
@@ -1449,7 +1450,7 @@ if (run("Table9")) {
 }
 
 ## ---------------------------------------------------------------------
-#  Generates Section 8.2: bootstrap intervals (% of birds with CI excluding 0)
+#  Generates Section 7: bootstrap intervals (% of birds with CI excluding 0)
 
 ## --------------------------------------------------------------------
 ##  Section 7: block-restricted timing nulls
@@ -1617,7 +1618,7 @@ if (run("Sec7Thresh")) {
 }
 
 ## ---------------------------------------------------------------------
-#  Generates Section 8.2: residual diagnostics and Figure 3
+#  Generates Section 7: residual diagnostics and Figure 3
 
 ## --------------------------------------------------------------------
 ##  Section 7: alternative event definitions
@@ -1689,7 +1690,7 @@ if (run("Sec7Events")) {
 }
 
 ## ---------------------------------------------------------------------
-#  Generates Section 8.4: null battery repeated across event thresholds
+#  Generates Section 7: null battery repeated across event thresholds
 
 ## --------------------------------------------------------------------
 ##  Section 7: rho(R) against residual structure
@@ -1914,6 +1915,7 @@ if (run("Table10")) {
       mu_base    = 100*f0$shares[1], mu_flock    = 100*f1$shares[1],
       flock_share= 100*f1$shares[4],
       gamma_med  = median(f1$gamma, na.rm=TRUE),
+      n_fit      = sum(!is.na(f1$gamma)),
       edges_base = f0$n_edges, edges_flock = f1$n_edges,
       ll_base=f0$loglik, ll_flock=f1$loglik,
       np_base=f0$npar,  np_flock=f1$npar)
@@ -1941,8 +1943,17 @@ if (run("Table10")) {
   cat(sprintf("  relative reduction: %.1f%%\n",
               100*(mean(D$cross_base)-mean(D$cross_flock))/mean(D$cross_base)))
   
-  dAIC <- (2*sum(D$np_base) - 2*sum(D$ll_base)) - (2*sum(D$np_flock) - 2*sum(D$ll_flock))
-  cat(sprintf("\n  dAIC for adding the flock term: %.1f (positive favours the flock term)\n", dAIC))
+  ## The criterion is a quasi-likelihood for a binary response, so an
+  ## information criterion built on it has no standard justification. We report
+  ## the change in the working Poisson criterion and the parameter count it
+  ## costs, and leave the comparison descriptive.
+  dQ <- sum(D$ll_flock) - sum(D$ll_base)
+  dp <- sum(D$np_flock) - sum(D$np_base)
+  cat(sprintf("\n  change in working Poisson criterion : dQ = %.3f\n", dQ))
+  cat(sprintf("  additional parameters actually fitted: %d\n", dp))
+  cat(sprintf("  group coefficients nominally available: %d\n", sum(D$n_fit)))
+  cat("  The two differ when a group column is identically zero and is dropped\n")
+  cat("  by the min_colmass screen; report the fitted count, not the nominal one.\n")
   
   ## ---- does the reduction concentrate in the high-synchrony releases? ---
   if (file.exists(file.path(OUT_DIR,"rho_vs_acf_per_release.csv"))) {
@@ -2318,6 +2329,123 @@ if (run("Figure1")) {
   cat("  bootstrap lower bound excludes zero are drawn, which is the selection\n")
   cat("  rule evaluated in Section 6 rather than an arbitrary threshold. Net\n")
   cat("  leadership is printed beside each node and encoded in its fill.\n")
+  message("  Complete")
+}
+
+## ---------------------------------------------------------------------
+#  Generates Section 7: support of the fitted conditional mean
+#
+#  The identity link enforces non-negativity of the excitation parameters but
+#  does not bound the fitted mean above. Where the response is binary a
+#  conditional mean greater than one is not attainable, and both the Bernoulli
+#  residual calculation and the Bernoulli data generation in the coverage
+#  simulation truncate at one. This block reports how often that truncation is
+#  active, under BOTH the restricted specification (gamma_i = 0) and the
+#  extended specification (gamma_i free), and in the coverage simulation.
+## ---------------------------------------------------------------------
+if (run("LambdaCheck")) {
+  message("\n### SUPPORT OF THE FITTED CONDITIONAL MEAN ###")
+  set.seed(SEED_BASE + 1190)
+  
+  H_MAIN <- 10          # group-activity window, bins; as in Table10
+  
+  ## leave-one-out group activity for target i, predictable by construction
+  lc_flock_z <- function(M, i, H) {
+    m <- M$m; B <- M$B; others <- setdiff(seq_len(m), i)
+    if (!length(others)) return(rep(0, B))
+    acc <- numeric(B)
+    for (j in others) for (h in seq_len(H)) acc <- acc + lagi(M$Y[j, ], h, B)
+    acc/(length(others)*H)
+  }
+  
+  ## fit one flight and return the fitted means, with or without the group term
+  lc_lambda <- function(G, cfg, use_flock) {
+    DZ <- build_W(G, cfg); m <- DZ$m; out <- list()
+    for (i in seq_len(m)) {
+      at <- DZ$rows[[i]]; if (length(at) < 2) next
+      y <- G$Y[i, at]; if (sum(y) < cfg$min_events) next
+      S <- design_i(DZ, G$Y, i, cfg)[at, , drop = FALSE]
+      X <- if (use_flock) cbind(S, lc_flock_z(G, i, H_MAIN)[at]) else S
+      keep <- which(colMeans(X) > cfg$min_colmass); if (!length(keep)) next
+      A1 <- cbind(1, X[, keep, drop = FALSE]); p <- length(keep)
+      nll <- function(th){lam <- pmax(as.numeric(A1 %*% th), 1e-12); -sum(y*log(lam)-lam)}
+      gr  <- function(th){lam <- pmax(as.numeric(A1 %*% th), 1e-12)
+      -as.numeric(crossprod(A1, y/lam - 1))}
+      o <- tryCatch(optim(c(max(mean(y),1e-6), rep(.1,p)), nll, gr, method = "L-BFGS-B",
+                          lower = c(cfg$eps_mu, rep(0,p)),
+                          control = list(maxit = 500, factr = 1e10)), error = function(e) NULL)
+      if (is.null(o)) next
+      out[[length(out)+1L]] <- data.table(
+        bird = i, bin = at, y = y,
+        lambda = pmax(as.numeric(A1 %*% o$par), 1e-12))
+    }
+    if (length(out)) rbindlist(out) else NULL
+  }
+  
+  ## ---- 1. the application, both specifications -------------------------
+  P <- prep_all()
+  SUP <- list()
+  for (gam in c(FALSE, TRUE)) {
+    LAM <- list()
+    for (fk in names(P)) {
+      d <- tryCatch(lc_lambda(P[[fk]], CFG, gam), error = function(e) NULL)
+      if (is.null(d)) next
+      d[, frkey := fk]; LAM[[fk]] <- d
+    }
+    D <- rbindlist(LAM)
+    lab <- if (gam) "extended (gamma free)" else "restricted (gamma = 0)"
+    byfl <- D[, .(max_lambda = max(lambda), n_gt1 = sum(lambda > 1)), by = frkey]
+    SUP[[lab]] <- data.table(
+      specification   = lab,
+      bins            = nrow(D),
+      releases        = uniqueN(D$frkey),
+      mean_lambda     = round(mean(D$lambda), 4),
+      observed_rate   = round(mean(D$y), 4),
+      max_lambda      = round(max(D$lambda), 4),
+      pct_gt1         = round(100*mean(D$lambda > 1), 3),
+      n_gt1           = sum(D$lambda > 1),
+      releases_with_gt1 = sum(byfl$n_gt1 > 0),
+      obs_rate_in_gt1 = if (any(D$lambda > 1)) round(D[lambda > 1, mean(y)], 4) else NA_real_)
+    fwrite(byfl, file.path(OUT_DIR,
+                           sprintf("lambda_support_by_release_%s.csv", if (gam) "extended" else "restricted")))
+    cat(sprintf("  %-22s  max %.4f   %%>1 %.3f   releases with any >1: %d of %d\n",
+                lab, max(D$lambda), 100*mean(D$lambda > 1),
+                sum(byfl$n_gt1 > 0), nrow(byfl)))
+  }
+  RES <- rbindlist(SUP)
+  print(RES); fwrite(RES, file.path(OUT_DIR, "lambda_support.csv"))
+  
+  ## ---- 2. the Bernoulli coverage simulation ----------------------------
+  ## simulate_Y caps the generating mean at one for the Bernoulli family.
+  ## Regenerate under the same settings and count how often that binds.
+  eta0 <- list(beta = CFG$beta, sigma_d = CFG$sigma_d, kappa = CFG$kappa)
+  capped <- total <- 0; maxlam <- 0
+  for (sc in c("single", "chain")) {
+    At <- make_A(sc, CFG$M)
+    for (r in seq_len(60)) {
+      mk <- simulate_marks(CFG); W <- build_W_sim(mk, eta0, CFG)
+      Y  <- matrix(0, CFG$M, CFG$B)
+      for (b in (CFG$L + 1):CFG$B) for (i in seq_len(CFG$M)) {
+        lam <- CFG$mu * CFG$bin_sec
+        for (j in seq_len(CFG$M)) for (l in seq_len(CFG$L)) {
+          wv <- W[[i]][[j]][[l]][b]
+          if (is.finite(wv) && wv != 0) lam <- lam + At[i, j] * wv * Y[j, b - l]
+        }
+        total <- total + 1
+        if (lam > 1) capped <- capped + 1
+        maxlam <- max(maxlam, lam)
+        Y[i, b] <- rbinom(1, 1, min(max(lam, 0), 1))
+      }
+    }
+  }
+  cat(sprintf("\n  Bernoulli simulation: generating mean capped in %d of %d draws (%.5f)\n",
+              capped, total, capped/total))
+  cat(sprintf("  largest generating mean before capping: %.4f\n", maxlam))
+  
+  cat("\n  Estimation uses the Poisson quasi-likelihood, which is defined for any\n")
+  cat("  positive mean and does not require lambda <= 1. The bound enters only the\n")
+  cat("  Bernoulli residual, evaluated at the truncated value in those bins, and\n")
+  cat("  the Bernoulli data generation above.\n")
   message("  Complete")
 }
 
