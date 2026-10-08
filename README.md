@@ -44,6 +44,7 @@ Results are written to CSV in the working directory, and the figure to PNG.
 | `Sec7Fits` | Section 7 | Intensity decomposition and the distribution of ρ(R) |
 | `Sec7Boot` | Section 7 | Cluster bootstrap intervals |
 | `Sec7Resid` | Section 7 | Residual diagnostics |
+| `LambdaCheck` | Section 7 | 	Support of the fitted conditional mean, both specifications |
 | `Sec7Lag` | Section 7 | The 2 s oscillation and its shared component |
 | `Sec7Origin` | Section 7 | Raw-signal spectrum before binning |
 | `Table9` | Table 9 | Null battery |
